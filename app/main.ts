@@ -25,7 +25,7 @@ async function callModel(prompt: string) {
     try {
       const resp = await client.chat.completions.create({
         model: MODEL,
-        temperature: 0,
+        temperature: 1,
         response_format: { type: 'json_object' },
         messages: [
           {

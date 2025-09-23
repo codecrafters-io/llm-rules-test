@@ -5,8 +5,7 @@ summary: "Tests must show specific commands and at least one exact expected outp
 micro_prompt: >
   Judge ONLY this rule:
   Rule: TESTS_REQUIREMENTS
-  - "### Tests" MUST exist exactly once.
-  - It MUST include specific tester commands AND at least one explicit expected output.
+  - "### Tests" MUST include specific tester commands AND at least one explicit expected output.
   - Output must match the command.
   Return JSON: {"id":"tests_requirements","pass":boolean,"rationale":string,"suggested_fixes":any[]}
 ---

@@ -26,7 +26,7 @@ d6:lengthi92063e4:name11:sample.txt12:piece lengthi131072e6:pieces20:....e
 
 Your parser needs to navigate this structure to extract the 'announce' string and the 'length' integer from the nested 'info' dictionary.
 
-### **Tests**
+### Tests
 
 The tester will execute your program like this:
 

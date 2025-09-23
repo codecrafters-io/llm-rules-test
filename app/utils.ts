@@ -93,9 +93,7 @@ const REPORT_IDX = args.indexOf('--report');
 export const REPORT_PATH = REPORT_IDX >= 0 ? args[REPORT_IDX + 1] : null;
 const MODEL_IDX = args.indexOf('--model');
 export const MODEL =
-  MODEL_IDX >= 0
-    ? args[MODEL_IDX + 1]
-    : process.env.LLM_LINT_MODEL || 'gpt-4o-mini';
+  MODEL_IDX >= 0 ? args[MODEL_IDX + 1] : process.env.LLM_LINT_MODEL || 'o3';
 
 if (!process.env.OPENAI_API_KEY) {
   console.error('OPENAI_API_KEY is not set.');
