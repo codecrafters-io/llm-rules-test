@@ -1,9 +1,6 @@
 import path from 'node:path';
 import fg from 'fast-glob';
 import crypto from 'node:crypto';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import { visit, EXIT } from 'unist-util-visit';
 
 // ---------- Pretty logging ----------
 export const color = {
@@ -129,32 +126,6 @@ export function sha256(s: string) {
   return crypto.createHash('sha256').update(s).digest('hex');
 }
 
-// Extract first non-empty paragraph (the “hook”), ignoring headings.
-export function extractFirstParagraph(md: string): string | null {
-  const tree = unified().use(remarkParse).parse(md);
-  let para: string | null = null;
-  visit(tree, (node: any) => {
-    if (para) return EXIT;
-    if (node.type === 'paragraph') {
-      let text = '';
-      visit(node, (n: any) => {
-        if (
-          n.type === 'text' ||
-          n.type === 'inlineCode' ||
-          n.type === 'emphasis' ||
-          n.type === 'strong' ||
-          n.type === 'link'
-        ) {
-          text += n.value || n.title || '';
-        }
-      });
-      text = text.replace(/\s+/g, ' ').trim();
-      if (text.length > 0) para = text;
-    }
-  });
-  return para;
-}
-
 // Initial R3
 // - At least one example interaction in Explanation (shell block) showing command AND human-readable output.
 // - "Tests" must include exact tester commands and exact expected RESP bytes when relevant.
@@ -174,3 +145,101 @@ export function extractFirstParagraph(md: string): string | null {
 // Rule: R4_DOMAIN_CORRECTNESS
 // - Check that the code examples and content are correct according to your knowledge of the domain.
 // - Check that there are no internal contradictions in the content.
+
+function promptR1(file: string, hook: string) {
+  return `
+Judge ONLY this rule:
+
+Rule: R1_HOOK_ONE_LINER
+- The "hook" must be exactly ONE sentence that states what the learner will do in this stage.
+- It should plausibly be <= 160 characters (soft cap).
+Return JSON:
+{"id":"R1_HOOK_ONE_LINER","pass":boolean,"rationale":string,"suggested_fixes":string[]}
+
+File: ${file}
+Hook to evaluate (verbatim):
+---HOOK---
+${hook}
+---END---
+`.trim();
+}
+
+// Split this
+function promptR2(file: string, markdown: string) {
+  return `
+Judge ONLY this rule:
+
+Rule: R2_SECTIONING
+- After the hook, content must be organized into titled explanation section(s) (>= 1) that each cover a single topic.,
+  then "### Tests" (must include what the tester will do and at least one expected output),
+  then optional "### Notes" (if present, <= 3 bullet points - remember that each bullet point can be multiple sentences).
+Return JSON:
+{"id":"R2_SECTIONING","pass":boolean,"rationale":string,"suggested_fixes":any[]}
+
+File: ${file}
+Markdown:
+---MD---
+${markdown}
+---END---
+`.trim();
+}
+
+function promptR3(file: string, markdown: string) {
+  return `
+Judge ONLY this rule:
+
+Rule: R3_EXAMPLES_EXPECTATIONS
+- Check every Explanation section and determine whether examples (code or shell) are needed to clarify key concepts. Only include examples if they aid understanding of formats, structure, or expected behavior.
+- Do NOT include examples or pseudocode that reveal full solutions or directly help the reader pass the stage. Code that shows input and expected output is acceptable if it clarifies format or structure.
+- Favor conceptual or illustrative examples: simplified shell interactions, bulleted list that illustrates structure, or fake/mock data that demonstrates structure (e.g. showing a sample .torrent file layout or output format).
+- If examples are needed in a section, ensure at least one interaction (e.g. shell command and/or expected output format) is shown to clarify behavior, **without solving the task** and give the example to pass the rule.
+- In "Tests" sections, include exact tester commands and expected outputs, including precise formatting (e.g. expected RESP bytes, decoded values) where relevant.
+Return JSON:
+{"id":"R3_EXAMPLES_EXPECTATIONS","pass":boolean,"rationale":string,"suggested_fixes":any[]}
+
+File: ${file}
+Markdown:
+---MD---
+${markdown}
+---END---
+`.trim();
+}
+
+function promptR4(file: string, markdown: string) {
+  return `
+Judge ONLY this rule:
+
+Rule: R4_DOMAIN_CORRECTNESS (Redis/RESP)
+- Check that the code examples and content are correct according to your knowledge of the domain.
+- Check that there are no internal contradictions in the content.
+Return JSON:
+{"id":"R4_DOMAIN_CORRECTNESS","pass":boolean,"rationale":string,"suggested_fixes":any[]}
+
+File: ${file}
+Markdown:
+---MD---
+${markdown}
+---END---
+`.trim();
+}
+
+function promptR5(file: string, markdown: string) {
+  return `
+Judge ONLY this rule:
+
+Rule: R5_CLARITY_STYLE
+- Tone: Friendly and approachable. User-centric & Empathetic. Neutral-professional — it doesn't get overly casual (no slang), but it avoids sounding stiff or academic.
+- Style: Instructional → Clear step-by-step guidance on what the learner needs to do in this stage. Explanatory → Includes background context. Conversational → Uses second-person address (“you'll”, “your program should…”) to engage directly with the reader.
+- Notes do not duplicate body content; if Notes exist, keep them focused (≤3).
+- Provide the exact solution to fix clarity/style issues if you can that will pass the rule.
+- Don't be too strict; if it's borderline, prefer PASS.
+Return JSON:
+{"id":"R5_CLARITY_STYLE","pass":boolean,"rationale":string,"suggested_fixes":any[]}
+
+File: ${file}
+Markdown:
+---MD---
+${markdown}
+---END---
+`.trim();
+}

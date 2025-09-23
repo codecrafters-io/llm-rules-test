@@ -4,7 +4,6 @@ import matter from 'gray-matter';
 import { OpenAI } from 'openai';
 import {
   color,
-  extractFirstParagraph,
   getTargets,
   MODEL,
   REPORT_PATH,
@@ -12,6 +11,7 @@ import {
   type FileResult,
   type RuleResult,
 } from './utils';
+import { loadAllRules, type RuleSpec } from './rule-loader';
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -57,155 +57,47 @@ async function callModel(prompt: string) {
   }
 }
 
-// ---------- Per-rule micro-prompts ----------
-// Add good and bad examples to each rule as needed.
-function promptR1(file: string, hook: string) {
+/**
+ * Build a deterministic, per-rule prompt by combining the rule's micro_prompt
+ * with the target file path & full Markdown content.
+ *
+ * NOTE: We no longer slice out the "hook" or any specific section here.
+ * If a rule needs the hook, its `micro_prompt` should instruct the model
+ * how to locate/evaluate it from the full content.
+ */
+function buildPrompt(rule: RuleSpec, filePath: string, markdown: string) {
   return `
-Judge ONLY this rule:
+${rule.micro_prompt.trim()}
 
-Rule: R1_HOOK_ONE_LINER
-- The "hook" must be exactly ONE sentence that states what the learner will do in this stage.
-- It should plausibly be <= 160 characters (soft cap).
-Return JSON:
-{"id":"R1_HOOK_ONE_LINER","pass":boolean,"rationale":string,"suggested_fixes":string[]}
-
-File: ${file}
-Hook to evaluate (verbatim):
----HOOK---
-${hook}
----END---
-`.trim();
-}
-
-// Split this
-function promptR2(file: string, markdown: string) {
-  return `
-Judge ONLY this rule:
-
-Rule: R2_SECTIONING
-- After the hook, content must be organized into titled explanation section(s) (>= 1) that each cover a single topic.,
-  then "### Tests" (must include what the tester will do and at least one expected output),
-  then optional "### Notes" (if present, <= 3 bullet points - remember that each bullet point can be multiple sentences).
-Return JSON:
-{"id":"R2_SECTIONING","pass":boolean,"rationale":string,"suggested_fixes":any[]}
-
-File: ${file}
+File: ${filePath}
 Markdown:
 ---MD---
 ${markdown}
 ---END---
-`.trim();
+  `.trim();
 }
 
-function promptR3(file: string, markdown: string) {
-  return `
-Judge ONLY this rule:
-
-Rule: R3_EXAMPLES_EXPECTATIONS
-- Check every Explanation section and determine whether examples (code or shell) are needed to clarify key concepts. Only include examples if they aid understanding of formats, structure, or expected behavior.
-- Do NOT include examples or pseudocode that reveal full solutions or directly help the reader pass the stage. Code that shows input and expected output is acceptable if it clarifies format or structure.
-- Favor conceptual or illustrative examples: simplified shell interactions, bulleted list that illustrates structure, or fake/mock data that demonstrates structure (e.g. showing a sample .torrent file layout or output format).
-- If examples are needed in a section, ensure at least one interaction (e.g. shell command and/or expected output format) is shown to clarify behavior, **without solving the task** and give the example to pass the rule.
-- In "Tests" sections, include exact tester commands and expected outputs, including precise formatting (e.g. expected RESP bytes, decoded values) where relevant.
-Return JSON:
-{"id":"R3_EXAMPLES_EXPECTATIONS","pass":boolean,"rationale":string,"suggested_fixes":any[]}
-
-File: ${file}
-Markdown:
----MD---
-${markdown}
----END---
-`.trim();
-}
-
-function promptR4(file: string, markdown: string) {
-  return `
-Judge ONLY this rule:
-
-Rule: R4_DOMAIN_CORRECTNESS (Redis/RESP)
-- Check that the code examples and content are correct according to your knowledge of the domain.
-- Check that there are no internal contradictions in the content.
-Return JSON:
-{"id":"R4_DOMAIN_CORRECTNESS","pass":boolean,"rationale":string,"suggested_fixes":any[]}
-
-File: ${file}
-Markdown:
----MD---
-${markdown}
----END---
-`.trim();
-}
-
-function promptR5(file: string, markdown: string) {
-  return `
-Judge ONLY this rule:
-
-Rule: R5_CLARITY_STYLE
-- Tone: Friendly and approachable. User-centric & Empathetic. Neutral-professional — it doesn't get overly casual (no slang), but it avoids sounding stiff or academic.
-- Style: Instructional → Clear step-by-step guidance on what the learner needs to do in this stage. Explanatory → Includes background context. Conversational → Uses second-person address (“you'll”, “your program should…”) to engage directly with the reader.
-- Notes do not duplicate body content; if Notes exist, keep them focused (≤3).
-- Provide the exact solution to fix clarity/style issues if you can that will pass the rule.
-- Don't be too strict; if it's borderline, prefer PASS.
-Return JSON:
-{"id":"R5_CLARITY_STYLE","pass":boolean,"rationale":string,"suggested_fixes":any[]}
-
-File: ${file}
-Markdown:
----MD---
-${markdown}
----END---
-`.trim();
-}
-
-// ---------- Lint one file (per-rule calls) ----------
-async function lintOne(file: string): Promise<FileResult> {
+// ---------- Lint one file (dynamic rules) ----------
+async function lintOne(file: string, rules: RuleSpec[]): Promise<FileResult> {
   const raw = await fs.readFile(file, 'utf8');
   const { content } = matter(raw);
-  const hook = extractFirstParagraph(content) || '';
 
   console.log(color.bold(`\n📄 ${path.relative(process.cwd(), file)}`));
 
   const results: RuleResult[] = [];
 
-  // R1: pass only the hook text
-  const r1 = await runRuleWithLogs('R1_HOOK_ONE_LINER', async () => {
-    try {
-      const r1json = await callModel(promptR1(file, hook));
-      const parsed = JSON.parse(r1json);
-      // Ensure id is correct if model omits it
-      parsed.id = 'R1_HOOK_ONE_LINER';
-      return parsed;
-    } catch (e: any) {
-      return {
-        id: 'R1_HOOK_ONE_LINER',
-        pass: false,
-        rationale: e?.insufficient_quota
-          ? 'LLM call failed: insufficient quota.'
-          : `LLM call failed: ${String(e?.message || e)}`,
-        suggested_fixes: ['Verify API key/org; try again.'],
-      };
-    }
-  });
-  results.push(r1);
-
-  // R2..R5
-  const RULES: Array<[string, (f: string, md: string) => string]> = [
-    ['R2_SECTIONING', promptR2],
-    ['R3_EXAMPLES_EXPECTATIONS', promptR3],
-    ['R4_DOMAIN_CORRECTNESS', promptR4],
-    ['R5_CLARITY_STYLE', promptR5],
-  ];
-
-  for (const [id, builder] of RULES) {
-    const rr = await runRuleWithLogs(id, async () => {
+  for (const rule of rules) {
+    const rr = await runRuleWithLogs(rule.id, async () => {
       try {
-        const json = await callModel(builder(file, content));
+        const prompt = buildPrompt(rule, file, content);
+        const json = await callModel(prompt);
         const parsed = JSON.parse(json);
-        parsed.id = id;
+        // ensure the id matches our rule id, even if the model omits/changes it
+        parsed.id = rule.id;
         return parsed;
       } catch (e: any) {
         return {
-          id,
+          id: rule.id,
           pass: false,
           rationale: e?.insufficient_quota
             ? 'LLM call failed: insufficient quota.'
@@ -235,10 +127,17 @@ async function main() {
     process.exit(0);
   }
 
+  // Load all atomic rules from the flat rules/ directory
+  const rules = await loadAllRules(path.resolve(process.cwd(), 'rules'));
+  if (rules.length === 0) {
+    console.log("No rules found under 'rules/'. Nothing to do.");
+    process.exit(1);
+  }
+
   const out: FileResult[] = [];
   for (const f of targets) {
     try {
-      const res = await lintOne(f);
+      const res = await lintOne(f, rules);
       out.push(res);
     } catch (e: any) {
       out.push({
@@ -246,7 +145,7 @@ async function main() {
         overall_pass: false,
         rules: [
           {
-            id: 'R0_ENGINE',
+            id: 'engine_error',
             pass: false,
             rationale: `Engine error: ${String(e?.message || e)}`,
             suggested_fixes: [],

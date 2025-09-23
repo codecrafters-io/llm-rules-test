@@ -3,22 +3,25 @@ id: hook_one_sentence
 severity: error
 summary: "Hook must be exactly one sentence (soft cap ≤160 chars)."
 micro_prompt: >
-  Judge ONLY this rule:
-  Rule: HOOK_ONE_SENTENCE
-  - The first paragraph ("hook") must be exactly one sentence.
-  - Prefer ≤160 characters, but PASS if clearly one concise sentence.
+  Judge ONLY this rule.
+  - Fetch all heading levels (### Section).
+  - Fetch the first heading you find and the first sentence after it.
+  - Fetch and state the text before the first heading.
+  - The hook is the first text as defined above and must be exactly one sentence.
+  - It should plausibly be <= 200 characters (soft cap).
+
   Return JSON: {"id":"hook_one_sentence","pass":boolean,"rationale":string,"suggested_fixes":string[]}
 ---
 
 ## Rule
-The hook is the **first paragraph** and must be **exactly one sentence**. Soft cap: ≤160 chars.
+The hook is the first paragraph as defined above and must be exactly one sentence. Soft cap: ≤160 chars.
 
 ## Good examples
-- “In this stage, you’ll add a non-zero timeout to `BLPOP` so it returns a null array when the timer expires.”
+- “In this stage, you’ll implement support for the PING command.”
 
 ## Bad examples
-- “In this stage, you’ll add a non-zero timeout to `BLPOP`. We’ll also cover RESP arrays.”
-- “We will implement `BLPOP` with timeout and discuss edge cases and testing and …” (run-on)
+- “In this stage, you’ll implement support for the PING command. We’ll also discuss RESP arrays.” (two sentences)
+- Starting with a heading and no paragraph before it.
 
 ## How to fix
-- Merge fragments into a single sentence and remove extra commentary.
+- Keep only one sentence in the first paragraph; move any extra sentences into an Explanation section.
