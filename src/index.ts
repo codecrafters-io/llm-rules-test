@@ -20,7 +20,7 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-const defaultModel = 'o3';
+const defaultModel = 'gpt-5';
 
 // ---------- CLI args ----------
 const args = process.argv.slice(2);

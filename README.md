@@ -35,7 +35,7 @@ bun run dev path/to/file1.md path/to/file2.md
 ### Environment variables
 
 * `OPENAI_API_KEY` (required)
-* `MODEL` (default: `o3`)
+* `MODEL`
 * `REPORT_PATH` (optional; write JSON report here)
 
 Example:
