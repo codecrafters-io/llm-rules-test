@@ -3,7 +3,7 @@
   "description": "Test stage instructions for LLM rules",
   "type": "module",
   "scripts": {
-    "dev": "bun run app/main.ts"
+    "dev": "bun run src/index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
