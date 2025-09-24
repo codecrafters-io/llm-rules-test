@@ -2,8 +2,6 @@ This repository is used to enforce atomic Markdown rules against course stage de
 - **Locally**, for quick checks while editing stage descriptions.  
 - **In CI/CD**, where it integrates with other repos to lint only changed files in pull requests.
 
----
-
 ## ✨ Features
 
 - **Atomic Markdown rules**: each rule lives in `rules/*.md` with front-matter and examples.
@@ -11,8 +9,6 @@ This repository is used to enforce atomic Markdown rules against course stage de
 - **Deterministic output**: runner enforces strict JSON schema for each rule result.
 - **CI integration**: checks only changed `stage_descriptions/**/*.md` files in PRs.
 - **PR feedback**: posts a sticky comment with pass/fail results and suggested fixes.
-
----
 
 ## 🚀 Usage
 
@@ -47,8 +43,6 @@ Example:
 ```bash
 MODEL=gpt-5 bun run dev stage_descriptions/02-blpop-timeout.md
 ```
-
----
 
 ## 🛠 Development
 
