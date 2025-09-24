@@ -2,7 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import matter from 'gray-matter';
 import { OpenAI } from 'openai';
-import { color, getTargets, loadAllRules, runRuleWithLogs } from './utils';
+import {
+  color,
+  getTargets,
+  loadAllRules,
+  renderConsoleReport,
+  runRuleWithLogs,
+} from './utils';
 import type { FileResult, RuleResult, RuleSpec } from './types';
 
 if (!process.env.OPENAI_API_KEY) {
@@ -186,20 +192,10 @@ async function main() {
     await fs.writeFile(REPORT_PATH, JSON.stringify(summary, null, 2), 'utf8');
     console.log(`Wrote report to ${REPORT_PATH}`);
   } else {
-    console.log(JSON.stringify(summary, null, 2));
+    renderConsoleReport(summary);
   }
 
-  const failed = out.filter((r) => !r.overall_pass).length;
-  const checked = out.length;
-  console.log(
-    `\n${
-      failed
-        ? color.red('Final: ' + failed + ' failed')
-        : color.green('Final: 0 failed')
-    } / ${checked} checked`
-  );
-
-  process.exit(0);
+  process.exit(summary.failed > 0 ? 1 : 0);
 }
 
 main().catch((err) => {

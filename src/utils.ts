@@ -2,7 +2,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import type { RuleResult, RuleSpec } from './types';
+import type { RuleResult, RuleSpec, Summary } from './types';
 
 // ---------- Pretty logging ----------
 export const color = {
@@ -118,4 +118,54 @@ export async function loadAllRules(dir: string): Promise<RuleSpec[]> {
 
   rules.sort((a, b) => a.id.localeCompare(b.id));
   return rules;
+}
+
+export function renderConsoleReport(summary: Summary) {
+  const { model, checked, passed, failed, files } = summary;
+
+  const header = [
+    color.bold('📄 LLM Doc Linter Report'),
+    '',
+    `${color.dim('Model')}: ${color.bold(model)}`,
+    `${color.dim('Files checked')}: ${color.bold(String(checked))}`,
+    `${color.green(`${passed} passed`)}, ${color.red(`${failed} failed`)}`,
+    '',
+  ].join('\n');
+
+  const perFile = files
+    .map((f) => {
+      const icon = f.overall_pass ? '✅' : '❌';
+      const title =
+        `${icon} ${color.bold(f.file)} ` +
+        color.dim(
+          `(${f.rules.filter((r) => r.pass).length} passed, ${
+            f.rules.filter((r) => !r.pass).length
+          } failed)`
+        );
+
+      const body = f.rules
+        .map((r) => {
+          const badge = r.pass ? color.green('PASS') : color.red('FAIL');
+          const rationale = r.rationale
+            ? `  ${color.dim('•')} ${r.rationale}`
+            : '';
+          let fixes = '';
+          if (Array.isArray(r.suggested_fixes) && r.suggested_fixes.length) {
+            const list = r.suggested_fixes
+              .map((x) => `    ${color.dim('→')} ${String(x)}`)
+              .join('\n');
+            fixes = `\n${list}`;
+          }
+          return `  ${badge}  ${color.bold(r.id)}\n${rationale}${fixes}`;
+        })
+        .join('\n');
+
+      return `${title}\n${body}`;
+    })
+    .join('\n\n');
+
+  console.log(header + perFile);
+  console.log(
+    '\n' + (failed ? color.red('Result: FAIL') : color.green('Result: PASS'))
+  );
 }
