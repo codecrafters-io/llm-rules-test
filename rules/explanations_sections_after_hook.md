@@ -5,10 +5,7 @@ summary: "After the hook, there must be one or more titled explanation section(s
 ---
 
 ## Rule
-- Fetch all heading levels (### Section).
-- After the hook, content must be organized into titled explanation section(s) (>= 1).,
-  then "### Tests",
-  then optional "### Notes".
+- After the hook, content must be organized into titled explanation section(s) (>= 1).
 
 ## Good examples
 - `### Understanding BLPOP Timeouts`  
@@ -22,6 +19,5 @@ summary: "After the hook, there must be one or more titled explanation section(s
 
 ## How to fix
 - Add at least one `### <Title>` explanation section before `### Tests`.
-- Split multi-topic sections into separate titled sections.
 
 

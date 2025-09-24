@@ -34,7 +34,7 @@ export async function runRuleWithLogs(
   const title = id;
   const label = `  ▶ ${title} `;
   const start = Date.now();
-  process.stdout.write(padDots(label));
+  process.stdout.write(color.white(padDots(label)));
 
   try {
     const res = await builder();
