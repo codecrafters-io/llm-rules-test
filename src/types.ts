@@ -24,14 +24,5 @@ export type Summary = {
   checked: number;
   passed: number;
   failed: number;
-  files: Array<{
-    file: string;
-    overall_pass: boolean;
-    rules: Array<{
-      id: string;
-      pass: boolean;
-      rationale?: string;
-      suggested_fixes?: any[];
-    }>;
-  }>;
+  files: FileResult[];
 };
