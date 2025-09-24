@@ -15,7 +15,6 @@ summary: "After the hook, there must be one or more titled explanation section(s
 
 ## Bad examples
 - No explanation sections; goes straight to `### Tests`.
-- `### Timeouts and Blocking and RESP and Edge Cases` (mixed topics in one section).
 
 ## How to fix
 - Add at least one `### <Title>` explanation section before `### Tests`.
