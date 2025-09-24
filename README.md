@@ -1,6 +1,6 @@
 This repository is used to enforce atomic Markdown rules against course stage descriptions (e.g. `stage_descriptions/**/*.md`). It can be run:
-- **Locally**, for quick checks while editing stage descriptions.  
-- **In CI/CD**, where it integrates with other repos to lint only changed files in pull requests.
+- **Locally**: for quick checks while editing stage descriptions.  
+- **In CI/CD**: where it integrates with other repos to lint only changed files in pull requests.
 
 ## ✨ Features
 
@@ -16,7 +16,7 @@ This repository is used to enforce atomic Markdown rules against course stage de
 
 ```bash
 bun install
-````
+```
 
 ### Run locally
 
