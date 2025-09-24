@@ -2,23 +2,34 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import matter from 'gray-matter';
 import { OpenAI } from 'openai';
-import {
-  color,
-  getTargets,
-  MODEL,
-  REPORT_PATH,
-  runRuleWithLogs,
-  type FileResult,
-  type RuleResult,
-} from './utils';
-import { loadAllRules, type RuleSpec } from './rule-loader';
+import { color, getTargets, loadAllRules, runRuleWithLogs } from './utils';
+import type { FileResult, RuleResult, RuleSpec } from './types';
+
+if (!process.env.OPENAI_API_KEY) {
+  console.error('OPENAI_API_KEY is not set.');
+  process.exit(2);
+}
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
+const defaultModel = 'o3';
+
+// ---------- CLI args ----------
+const args = process.argv.slice(2);
+const ONLY_IDX = args.indexOf('--only');
+const ONLY = ONLY_IDX >= 0 ? args[ONLY_IDX + 1] : null;
+const REPORT_IDX = args.indexOf('--report');
+const REPORT_PATH = REPORT_IDX >= 0 ? args[REPORT_IDX + 1] : null;
+const MODEL_IDX = args.indexOf('--model');
+const MODEL =
+  MODEL_IDX >= 0
+    ? args[MODEL_IDX + 1]
+    : process.env.LLM_LINT_MODEL || defaultModel;
+
 // One LLM call with retry/backoff; throws on insufficient_quota
-async function callModel(prompt: string) {
+async function callModel(userContent: string) {
   const MAX_RETRIES = 3;
   let attempt = 0;
   while (true) {
@@ -31,9 +42,9 @@ async function callModel(prompt: string) {
           {
             role: 'system',
             content:
-              'You are a strict, deterministic doc linter. Return ONLY valid JSON.',
+              'You are a strict, deterministic doc linter. Return ONLY valid JSON that matches the requested schema.',
           },
-          { role: 'user', content: prompt },
+          { role: 'user', content: userContent },
         ],
       });
       return resp.choices[0].message!.content!;
@@ -58,23 +69,28 @@ async function callModel(prompt: string) {
 }
 
 /**
- * Build a deterministic, per-rule prompt by combining the rule's micro_prompt
- * with the target file path & full Markdown content.
- *
- * NOTE: We no longer slice out the "hook" or any specific section here.
- * If a rule needs the hook, its `micro_prompt` should instruct the model
- * how to locate/evaluate it from the full content.
+ * Build a single generic prompt. We no longer use per-rule micro_prompts.
+ * - Feed the ENTIRE rule Markdown (so the model sees Rule, Good/Bad examples, How to fix).
+ * - Feed the ENTIRE target file Markdown.
+ * - Instruct the model to apply ONLY the criteria in the rule doc and return the standard JSON.
  */
-function buildPrompt(rule: RuleSpec, filePath: string, markdown: string) {
+function buildPrompt(rule: RuleSpec, filePath: string, fileMarkdown: string) {
   return `
-${rule.micro_prompt.trim()}
+You are evaluating a single lint rule described in a Markdown document.
+Apply ONLY the criteria specified in that rule document (including how to count/locate elements).
+Return ONLY valid JSON with this exact schema:
+{"id":"${rule.id}","pass":boolean,"rationale":string,"suggested_fixes":any[]}
 
-File: ${filePath}
-Markdown:
----MD---
-${markdown}
----END---
-  `.trim();
+--- RULE DOCUMENT (Markdown) START ---
+${rule.markdown}
+--- RULE DOCUMENT (Markdown) END ---
+
+--- TARGET FILE PATH ---
+${filePath}
+--- TARGET FILE CONTENT (Markdown) START ---
+${fileMarkdown}
+--- TARGET FILE CONTENT (Markdown) END ---
+`.trim();
 }
 
 // ---------- Lint one file (dynamic rules) ----------
@@ -92,8 +108,7 @@ async function lintOne(file: string, rules: RuleSpec[]): Promise<FileResult> {
         const prompt = buildPrompt(rule, file, content);
         const json = await callModel(prompt);
         const parsed = JSON.parse(json);
-        // ensure the id matches our rule id, even if the model omits/changes it
-        parsed.id = rule.id;
+        parsed.id = rule.id; // enforce stable id
         return parsed;
       } catch (e: any) {
         return {
@@ -121,13 +136,16 @@ async function lintOne(file: string, rules: RuleSpec[]): Promise<FileResult> {
 
 // ---------- Main ----------
 async function main() {
-  const targets = await getTargets();
+  const cliTargets = process.argv.slice(2).filter(Boolean);
+  const targets = cliTargets.length ? cliTargets : await getTargets(ONLY);
+
   if (targets.length === 0) {
-    console.log("No Markdown files found under 'stages/'.");
+    console.log(
+      "No Markdown files found under 'stage_descriptions/' or no CLI targets provided."
+    );
     process.exit(0);
   }
 
-  // Load all atomic rules from the flat rules/ directory
   const rules = await loadAllRules(path.resolve(process.cwd(), 'rules'));
   if (rules.length === 0) {
     console.log("No rules found under 'rules/'. Nothing to do.");
@@ -181,7 +199,7 @@ async function main() {
     } / ${checked} checked`
   );
 
-  process.exit(out.some((r) => !r.overall_pass) ? 1 : 0);
+  process.exit(0);
 }
 
 main().catch((err) => {

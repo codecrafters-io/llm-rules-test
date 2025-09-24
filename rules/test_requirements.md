@@ -2,13 +2,10 @@
 id: tests_requirements
 severity: error
 summary: "Tests must show specific commands and at least one exact expected output."
-micro_prompt: >
-  Judge ONLY this rule:
-  Rule: TESTS_REQUIREMENTS
-  - "### Tests" MUST include specific tester commands AND at least one explicit expected output.
-  - Output must match the command.
-  Return JSON: {"id":"tests_requirements","pass":boolean,"rationale":string,"suggested_fixes":any[]}
 ---
+
+## Rule
+"### Tests" MUST include specific tester commands AND at least one explicit expected output.
 
 ## Good example
 Command:

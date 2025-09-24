@@ -9,9 +9,6 @@
     "@types/bun": "latest",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
-    "openai": "^5.22.0",
-    "remark": "^15.0.1",
-    "remark-parse": "^11.0.0",
-    "unified": "^11.0.5"
+    "openai": "^5.22.0"
   }
 }
