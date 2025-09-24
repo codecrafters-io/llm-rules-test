@@ -20,13 +20,13 @@ bun install
 
 ### Run locally
 
-Lint all targets (default `stage_descriptions/`):
+Create a set of stage descriptions to lint in `stage_descriptions/`, then run:
 
 ```bash
 bun run dev
 ```
 
-Lint specific files:
+You can also lint specific files:
 
 ```bash
 bun run dev path/to/file1.md path/to/file2.md
