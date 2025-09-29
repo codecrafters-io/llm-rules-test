@@ -5,7 +5,8 @@ summary: "Tests must show specific commands and at least one exact expected outp
 ---
 
 ## Rule
-"### Tests" MUST include specific tester commands AND at least one explicit expected output.
+- "### Tests" MUST include specific tester commands AND at least one expected output.
+- The output doesn't have to be explicit, it can just talk about what the tester would do/check for after the input.
 
 ## Good example
 Command:

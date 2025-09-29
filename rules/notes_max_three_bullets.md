@@ -6,7 +6,7 @@ summary: "If \"### Notes\" exists, it must contain ≤ 3 bullet points (bullets 
 
 ## Rule
 - If there is no "### Notes" section, PASS (not applicable).
-- If "### Notes" exists, it should have 3 bullet points at most - remember that each bullet point can be multiple sentences.
+- If "### Notes" exists, it should have 3 bullet points at most - remember that each bullet point can be multiple sentences and have sub-bullets.
 
 ## Good examples
 ```md
