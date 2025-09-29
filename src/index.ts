@@ -35,6 +35,8 @@ const SHOW_PASS_DETAILS = !!cli.showPassDetails;
 const FILE_CONCURRENCY = Math.max(1, Number(cli.fileConcurrency ?? 2));
 const RULE_CONCURRENCY = Math.max(1, Number(cli.ruleConcurrency ?? 4));
 const ONLY = cli.only || null;
+const INCLUDE_SOURCE = !!cli.includeSource;
+const EXPAND_SOURCE = !!cli.expandSource;
 
 // ---------- Small, dependency-free promise pool ----------
 async function runPool<T>(
@@ -171,7 +173,7 @@ async function lintOne(file: string, rules: RuleSpec[]): Promise<FileResult> {
   );
 
   const overall_pass = failed === 0;
-  return { file, overall_pass, rules: results };
+  return { file, overall_pass, rules: results, source: content };
 }
 
 // ---------- Main (files run in PARALLEL with a limit) ----------
@@ -239,6 +241,8 @@ async function main() {
     format: PRETTY_FORMAT,
     outBasePath: PRETTY_OUT,
     showPassDetails: SHOW_PASS_DETAILS,
+    includeSource: INCLUDE_SOURCE,
+    expandSource: EXPAND_SOURCE,
   });
 
   process.exit(summary.failed > 0 ? 1 : 0);

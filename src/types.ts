@@ -8,7 +8,9 @@ export type CLIOpts = {
   fileConcurrency?: number;
   ruleConcurrency?: number;
   noReport?: boolean;
-  positional: string[]; // files
+  positional: string[];
+  includeSource?: boolean;
+  expandSource?: boolean;
 };
 
 export type RuleResult = {
@@ -22,6 +24,7 @@ export type FileResult = {
   file: string;
   overall_pass: boolean;
   rules: RuleResult[];
+  source?: string;
 };
 
 export type RuleSpec = {
@@ -56,4 +59,6 @@ export type PrettyReportOptions = {
   outBasePath?: string;
   // when true, include rationale/fixes for passed rules
   showPassDetails?: boolean;
+  includeSource?: boolean;
+  expandSource?: boolean;
 };

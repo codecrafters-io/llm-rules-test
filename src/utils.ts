@@ -44,6 +44,8 @@ export function parseCLI(argv: string[]): CLIOpts {
       ? Number(process.env.RULE_CONCURRENCY)
       : undefined,
     noReport: false,
+    includeSource: true,
+    expandSource: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -76,6 +78,12 @@ export function parseCLI(argv: string[]): CLIOpts {
         break;
       case '--no-report':
         opts.noReport = true;
+        break;
+      case '--include-source':
+        opts.includeSource = true;
+        break;
+      case '--expand-source':
+        opts.expandSource = true;
         break;
       default:
         if (a?.startsWith('-')) {

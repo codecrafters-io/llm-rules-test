@@ -12,6 +12,11 @@ const niceDate = () =>
     minute: '2-digit',
   });
 
+const codeFenceSafe = (md: string) => {
+  // prevent breaking fenced blocks if content contains ```
+  return md.replace(/```/g, '``\\`');
+};
+
 /* ----------------------------- Markdown report ----------------------------- */
 
 function slugify(id: string) {
@@ -27,6 +32,8 @@ export function renderMarkdownReport(
 ): string {
   const { model, checked, passed, failed, files } = summary;
   const showPassDetails = !!opts.showPassDetails;
+  const includeSource = !!opts.includeSource;
+  const expandSource = !!opts.expandSource;
   const safe = (s: any) => String(s).replace(/\r?\n/g, ' ');
   const badge = (ok: boolean) => (ok ? '✅' : '❌');
 
@@ -119,12 +126,29 @@ export function renderMarkdownReport(
         })
         .join('\n');
 
+      const sourceBlock =
+        includeSource && f.source
+          ? [
+              ``,
+              `<details${expandSource ? ' open' : ''}>`,
+              `<summary><strong>View source markdown</strong></summary>`,
+              ``,
+              '```markdown',
+              codeFenceSafe(f.source),
+              '```',
+              ``,
+              `</details>`,
+            ].join('\n')
+          : '';
+
       return [
         `\n---\n`,
         `### ${ok ? '✅' : '❌'} \`${path.basename(
           f.file
         )}\`  —  _${passCount} passed, ${failCount} failed_`,
         `<a id="${fileId}"></a>`,
+        ``,
+        sourceBlock,
         ``,
         failCount
           ? `**Failed rules**\n\n${failedBlocks}`
@@ -154,6 +178,8 @@ export function renderHtmlReport(
 ): string {
   const { failed, files } = summary;
   const showPassDetails = !!opts.showPassDetails;
+  const includeSource = !!opts.includeSource;
+  const expandSource = !!opts.expandSource;
 
   const esc = (s: any) =>
     String(s)
@@ -281,6 +307,20 @@ export function renderHtmlReport(
         })
         .join('');
 
+      const sourceBlock =
+        includeSource && f.source
+          ? `
+        <details class="source"${expandSource ? ' open' : ''}>
+          <summary>View source markdown</summary>
+          <div class="source-actions">
+            <button class="copy-btn" data-target="${id}-src">Copy</button>
+          </div>
+          <pre><code id="${id}-src" class="lang-md">${esc(
+              f.source
+            )}</code></pre>
+        </details>`
+          : '';
+
       return `
         <section class="file ${
           f.overall_pass ? 'ok' : 'bad'
@@ -290,6 +330,8 @@ export function renderHtmlReport(
       )}
             <small>(${passCount} passed, ${failCount} failed)</small>
           </h2>
+
+          ${sourceBlock}
 
           <div class="rules-group">
             <h3>Failed rules</h3>
@@ -337,7 +379,6 @@ export function renderHtmlReport(
   nav.skip a{position:absolute;left:-9999px}
   nav.skip a:focus{left:20px;top:10px;background:#fff;color:#000;padding:8px;border-radius:6px;z-index:999}
 
-  /* Summary table */
   table.summary{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:12px;overflow:hidden}
   table.summary th, table.summary td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
   table.summary thead th{background:var(--table);text-align:left;color:var(--muted);font-size:13px}
@@ -364,6 +405,13 @@ export function renderHtmlReport(
   .kv>ul{margin:0;padding-left:18px}
   .kv>ul .more{color:var(--muted);list-style: none;margin-left:-18px}
 
+  details.source{margin-top:10px}
+  details.source summary{cursor:pointer;color:var(--hl);outline:none}
+  details.source .source-actions{display:flex;justify-content:flex-end;margin:6px 0}
+  .copy-btn{background:var(--chip);border:1px solid rgba(255,255,255,.1);color:var(--ink);padding:4px 8px;border-radius:6px;cursor:pointer}
+  .copy-btn:hover{filter:brightness(1.1)}
+  pre{background:#0b0d13;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px;overflow:auto}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Monaco,monospace;font-size:12px;white-space:pre}
   .muted{color:var(--muted)}
   .backlinks{margin-top:8px}
   footer{margin:16px 0 40px;color:var(--muted)}
@@ -381,7 +429,6 @@ export function renderHtmlReport(
       <span class="chip">Files: <strong>${summary.checked}</strong></span>
       <span class="chip ok">Passed: <strong>${summary.passed}</strong></span>
       <span class="chip bad">Failed: <strong>${summary.failed}</strong></span>
-      ${resultBadge}
     </div>
   </header>
 
@@ -390,8 +437,8 @@ export function renderHtmlReport(
   <table class="summary" role="table" aria-label="Summary of all stages">
     <thead>
       <tr>
-      <th scope="col">Stage</th>
-      <th scope="col" style="width:64px;text-align:center;">Status</th>
+        <th scope="col" style="width:64px;text-align:center;">Status</th>
+        <th scope="col">Stage</th>
         <th scope="col" style="text-align:right;">Passed</th>
         <th scope="col" style="text-align:right;">Failed</th>
         <th scope="col">Failed Rules</th>
@@ -406,6 +453,21 @@ export function renderHtmlReport(
 
   <footer>End of report • <a href="#top">Back to top</a></footer>
 </div>
+<script>
+  // Copy button handler
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+    const id = btn.getAttribute('data-target');
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.textContent || '');
+      btn.textContent = 'Copied!';
+      setTimeout(() => (btn.textContent = 'Copy'), 1200);
+    } catch {}
+  });
+</script>
 </body>
 </html>`;
 }
