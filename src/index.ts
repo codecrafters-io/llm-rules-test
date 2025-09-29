@@ -6,35 +6,60 @@ import {
   color,
   getTargets,
   loadAllRules,
+  parseCLI,
   renderConsoleReport,
   runRuleWithLogs,
 } from './utils';
 import type { FileResult, RuleResult, RuleSpec } from './types';
+import { writePrettyReport } from './reporters';
 
 if (!process.env.OPENAI_API_KEY) {
   console.error('OPENAI_API_KEY is not set.');
   process.exit(2);
 }
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
-const defaultModel = 'gpt-5';
+const DEFAULT_MODEL = 'o3';
+const DEFAULT_REPORT_PATH = path.resolve(process.cwd(), 'reports/lint.json');
 
 // ---------- CLI args ----------
-const args = process.argv.slice(2);
-const ONLY_IDX = args.indexOf('--only');
-const ONLY = ONLY_IDX >= 0 ? args[ONLY_IDX + 1] : null;
-const REPORT_IDX = args.indexOf('--report');
-const REPORT_PATH = REPORT_IDX >= 0 ? args[REPORT_IDX + 1] : null;
-const MODEL_IDX = args.indexOf('--model');
-const MODEL =
-  MODEL_IDX >= 0
-    ? args[MODEL_IDX + 1]
-    : process.env.LLM_LINT_MODEL || defaultModel;
+const argv = process.argv.slice(2);
+const cli = parseCLI(argv);
 
-// One LLM call with retry/backoff; throws on insufficient_quota
+const MODEL = cli.model || DEFAULT_MODEL;
+const REPORT_PATH = cli.noReport ? null : cli.reportPath || DEFAULT_REPORT_PATH;
+const PRETTY_FORMAT = cli.format || 'md'; // md | html | pdf | all
+const PRETTY_OUT = cli.outBase || path.resolve(process.cwd(), 'reports/lint');
+const SHOW_PASS_DETAILS = !!cli.showPassDetails;
+const FILE_CONCURRENCY = Math.max(1, Number(cli.fileConcurrency ?? 2));
+const RULE_CONCURRENCY = Math.max(1, Number(cli.ruleConcurrency ?? 4));
+const ONLY = cli.only || null;
+
+// ---------- Small, dependency-free promise pool ----------
+async function runPool<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length) as any;
+  let i = 0;
+
+  async function worker() {
+    while (true) {
+      const idx = i++;
+      if (idx >= tasks.length) break;
+      results[idx] = await tasks[idx]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () =>
+    worker()
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+// ---------- OpenAI call with retry/backoff ----------
 async function callModel(userContent: string) {
   const MAX_RETRIES = 3;
   let attempt = 0;
@@ -75,10 +100,9 @@ async function callModel(userContent: string) {
 }
 
 /**
- * Build a single generic prompt. We no longer use per-rule micro_prompts.
+ * Build a single generic prompt.
  * - Feed the ENTIRE rule Markdown (so the model sees Rule, Good/Bad examples, How to fix).
  * - Feed the ENTIRE target file Markdown.
- * - Instruct the model to apply ONLY the criteria in the rule doc and return the standard JSON.
  */
 function buildPrompt(rule: RuleSpec, filePath: string, fileMarkdown: string) {
   return `
@@ -99,51 +123,64 @@ ${fileMarkdown}
 `.trim();
 }
 
-// ---------- Lint one file (dynamic rules) ----------
+// ---------- Lint one file (rules run in PARALLEL with a limit) ----------
 async function lintOne(file: string, rules: RuleSpec[]): Promise<FileResult> {
   const raw = await fs.readFile(file, 'utf8');
   const { content } = matter(raw);
 
   console.log(color.bold(`\n📄 ${path.relative(process.cwd(), file)}`));
 
-  const results: RuleResult[] = [];
+  // Create a task per rule; each task returns RuleResult
+  const tasks = rules.map((rule) => {
+    return async () => {
+      const rr = await runRuleWithLogs(
+        rule.id,
+        async () => {
+          try {
+            const prompt = buildPrompt(rule, file, content);
+            const json = await callModel(prompt);
+            const parsed = JSON.parse(json);
+            parsed.id = rule.id;
+            return parsed;
+          } catch (e: any) {
+            return {
+              id: rule.id,
+              pass: false,
+              rationale: e?.insufficient_quota
+                ? 'LLM call failed: insufficient quota.'
+                : `LLM call failed: ${String(e?.message || e)}`,
+              suggested_fixes: ['Verify API key/org; try again.'],
+            } as RuleResult;
+          }
+        },
+        { filePath: file }
+      );
+      return rr;
+    };
+  });
 
-  for (const rule of rules) {
-    const rr = await runRuleWithLogs(rule.id, async () => {
-      try {
-        const prompt = buildPrompt(rule, file, content);
-        const json = await callModel(prompt);
-        const parsed = JSON.parse(json);
-        parsed.id = rule.id; // enforce stable id
-        return parsed;
-      } catch (e: any) {
-        return {
-          id: rule.id,
-          pass: false,
-          rationale: e?.insufficient_quota
-            ? 'LLM call failed: insufficient quota.'
-            : `LLM call failed: ${String(e?.message || e)}`,
-          suggested_fixes: ['Verify API key/org; try again.'],
-        };
-      }
-    });
-    results.push(rr);
-  }
+  const results: RuleResult[] = await runPool(tasks, RULE_CONCURRENCY);
 
-  const passCount = results.filter((r) => r.pass).length;
-  const summaryEmoji = passCount === results.length ? '✅' : '❌';
+  const passed = results.filter((r) => r.pass).length;
+  const failed = results.length - passed;
+  const summaryEmoji = failed === 0 ? '✅' : '❌';
   console.log(
-    `  └ Summary: ${passCount}/${results.length} passed  ${summaryEmoji}`
+    `  ${color.dim(`[${path.basename(file)}]`)} ${color.bold(
+      '▶ Summary'
+    )}: ${passed} passed, ${failed} failed  ${summaryEmoji}`
   );
 
-  const overall_pass = results.every((r) => r.pass);
+  const overall_pass = failed === 0;
   return { file, overall_pass, rules: results };
 }
 
-// ---------- Main ----------
+// ---------- Main (files run in PARALLEL with a limit) ----------
 async function main() {
-  const cliTargets = process.argv.slice(2).filter(Boolean);
-  const targets = cliTargets.length ? cliTargets : await getTargets(ONLY);
+  // Allow passing explicit file paths (first non-flag args)
+  const explicitTargets = cli.positional;
+  const targets = explicitTargets.length
+    ? explicitTargets
+    : await getTargets(ONLY);
 
   if (targets.length === 0) {
     console.log(
@@ -158,26 +195,30 @@ async function main() {
     process.exit(1);
   }
 
-  const out: FileResult[] = [];
-  for (const f of targets) {
-    try {
-      const res = await lintOne(f, rules);
-      out.push(res);
-    } catch (e: any) {
-      out.push({
-        file: f,
-        overall_pass: false,
-        rules: [
-          {
-            id: 'engine_error',
-            pass: false,
-            rationale: `Engine error: ${String(e?.message || e)}`,
-            suggested_fixes: [],
-          },
-        ],
-      });
-    }
-  }
+  // Build file-level tasks
+  const fileTasks = targets.map((f) => {
+    return async (): Promise<FileResult> => {
+      try {
+        return await lintOne(f, rules);
+      } catch (e: any) {
+        return {
+          file: f,
+          overall_pass: false,
+          rules: [
+            {
+              id: 'engine_error',
+              pass: false,
+              rationale: `Engine error: ${String(e?.message || e)}`,
+              suggested_fixes: [],
+            },
+          ],
+        };
+      }
+    };
+  });
+
+  // Run files in parallel with limit
+  const out: FileResult[] = await runPool(fileTasks, FILE_CONCURRENCY);
 
   const summary = {
     model: MODEL,
@@ -190,10 +231,15 @@ async function main() {
   if (REPORT_PATH) {
     await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
     await fs.writeFile(REPORT_PATH, JSON.stringify(summary, null, 2), 'utf8');
-    console.log(`Wrote report to ${REPORT_PATH}`);
-  } else {
-    renderConsoleReport(summary);
+    console.log(`📦 Wrote JSON summary to ${REPORT_PATH}`);
   }
+
+  renderConsoleReport(summary, { showPassDetails: SHOW_PASS_DETAILS });
+  await writePrettyReport(summary, {
+    format: PRETTY_FORMAT,
+    outBasePath: PRETTY_OUT,
+    showPassDetails: SHOW_PASS_DETAILS,
+  });
 
   process.exit(summary.failed > 0 ? 1 : 0);
 }
