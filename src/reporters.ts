@@ -1,4 +1,3 @@
-// src/reporters.ts
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { PrettyReportOptions, RuleResult, Summary } from './types';
@@ -437,7 +436,7 @@ export function renderHtmlReport(
   <table class="summary" role="table" aria-label="Summary of all stages">
     <thead>
       <tr>
-        <th scope="col" style="width:64px;text-align:center;">Status</th>
+        <th scope="col" style="text-align:center;">Status</th>
         <th scope="col">Stage</th>
         <th scope="col" style="text-align:right;">Passed</th>
         <th scope="col" style="text-align:right;">Failed</th>

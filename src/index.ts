@@ -20,7 +20,7 @@ if (!process.env.OPENAI_API_KEY) {
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
-const DEFAULT_MODEL = 'o3';
+const DEFAULT_MODEL = 'gpt-5';
 const DEFAULT_REPORT_PATH = path.resolve(process.cwd(), 'reports/lint.json');
 
 // ---------- CLI args ----------
@@ -32,8 +32,16 @@ const REPORT_PATH = cli.noReport ? null : cli.reportPath || DEFAULT_REPORT_PATH;
 const PRETTY_FORMAT = cli.format || 'md'; // md | html | pdf | all
 const PRETTY_OUT = cli.outBase || path.resolve(process.cwd(), 'reports/lint');
 const SHOW_PASS_DETAILS = !!cli.showPassDetails;
-const FILE_CONCURRENCY = Math.max(1, Number(cli.fileConcurrency ?? 2));
-const RULE_CONCURRENCY = Math.max(1, Number(cli.ruleConcurrency ?? 4));
+const DEFAULT_FILE_CONCURRENCY = 100;
+const DEFAULT_RULE_CONCURRENCY = 50;
+const FILE_CONCURRENCY = Math.max(
+  1,
+  Number(cli.fileConcurrency ?? DEFAULT_FILE_CONCURRENCY)
+);
+const RULE_CONCURRENCY = Math.max(
+  1,
+  Number(cli.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY)
+);
 const ONLY = cli.only || null;
 const INCLUDE_SOURCE = !!cli.includeSource;
 const EXPAND_SOURCE = !!cli.expandSource;

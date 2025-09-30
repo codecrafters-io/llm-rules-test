@@ -6,6 +6,7 @@ summary: "Content must be internally consistent and free of contradictions."
 
 ## Rule
 - Check that there are no internal contradictions in the content.
+- Don't look into examples, only the main content.
 
 ## Good examples
 - Consistent terminology and definitions throughout the document.
