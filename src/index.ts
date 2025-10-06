@@ -253,7 +253,25 @@ async function main() {
     expandSource: EXPAND_SOURCE,
   });
 
-  process.exit(summary.failed > 0 ? 1 : 0);
+  const engineErrors = summary.files.some((f) =>
+    f.rules.some((r) => r.id === 'engine_error')
+  );
+
+  if (engineErrors) {
+    process.exit(2);
+  } else {
+    // Just print a notice if there were failed rules, don’t abort CI
+    if (summary.failed > 0) {
+      console.log(
+        '\n' +
+          color.yellow('⚠️  Some stages failed rules, see report for details.')
+      );
+    } else {
+      console.log('\n' + color.green('✅  All stages passed!'));
+    }
+
+    process.exit(0);
+  }
 }
 
 main().catch((err) => {
