@@ -32,86 +32,95 @@ function findLine(src, q) {
   return Math.max(1, src.slice(0, idx).split(/\r?\n/).length);
 }
 
-function normalizeFix(fx) {
-  if (fx == null) return '';
-  if (typeof fx === 'string') return fx.trim();
-
-  // Prefer precise location/transform first
-  if (fx.line != null || fx.before || fx.after || fx.heading) {
-    const parts = [];
-    if (fx.line != null) parts.push(`line ${fx.line}:`);
-    if (fx.before && fx.after)
-      return `${parts.join(' ')} "${fx.before}" → "${fx.after}"`.trim();
-    if (fx.after && !fx.before)
-      return `${parts.join(' ')} replace with "${fx.after}"`.trim();
-    if (fx.before && !fx.after)
-      return `${parts.join(' ')} replace "${
-        fx.before
-      }" (after: missing)`.trim();
-    if (fx.heading)
-      return `${parts.join(' ')} set heading to "${fx.heading}"`.trim();
-    // fallthrough if nothing usable
+function renderFixKV(fx) {
+  if (fx == null) return ''; // skip empties
+  if (typeof fx === 'string') {
+    const t = fx.trim();
+    return t ? `- fix: ${t}` : '';
+  }
+  if (typeof fx !== 'object') {
+    return `- fix: ${String(fx)}`;
   }
 
-  // match/replace_with pair
-  if (fx.match || fx.replace_with) {
-    const m = fx.match ? `"${fx.match}"` : 'pattern';
-    const r = fx.replace_with ? `"${fx.replace_with}"` : 'replacement';
-    return `replace ${m} → ${r}`;
-  }
+  // Preferred ordering of keys if present
+  const order = [
+    'line',
+    'before',
+    'after',
+    'match',
+    'replace_with',
+    'original',
+    'suggestion',
+    'explanation',
+    'quote',
+    'action',
+    'target_location',
+    'current_text',
+    'replacement_text',
+    'reason',
+    'heading',
+    'description',
+    'proposed_hook',
+    'add_section_after_hook',
+  ];
 
-  // original/suggestion[/explanation] — only show "original" if present
-  if (fx.original || fx.suggestion || fx.explanation) {
-    const lhs = fx.original ? `"${fx.original}"` : '';
-    const rhs = fx.suggestion ? `"${fx.suggestion}"` : '';
-    const e = fx.explanation ? ` — ${fx.explanation}` : '';
-    if (lhs && rhs) return `change ${lhs} → ${rhs}${e}`;
-    if (rhs) return `change to ${rhs}${e}`;
-    if (lhs) return `change ${lhs}${e}`;
-    // nothing meaningful
-  }
-
-  // action/target_location/current_text/replacement_text/reason
+  // Flatten add_section_after_hook for readability
+  const flat = { ...fx };
   if (
-    fx.action ||
-    fx.current_text ||
-    fx.replacement_text ||
-    fx.reason ||
-    fx.target_location
+    flat.add_section_after_hook &&
+    typeof flat.add_section_after_hook === 'object'
   ) {
-    const parts = [];
-    if (fx.action) parts.push(`[${fx.action}]`);
-    if (fx.target_location) parts.push(`at ${fx.target_location}`);
-    if (fx.current_text || fx.replacement_text) {
-      const cur = fx.current_text ? `"${fx.current_text}"` : 'n/a';
-      const rep = fx.replacement_text ? `"${fx.replacement_text}"` : 'n/a';
-      parts.push(`${cur} → ${rep}`);
+    const h = flat.add_section_after_hook.heading;
+    const b = flat.add_section_after_hook.body;
+    if (h) flat['add_section_after_hook.heading'] = h;
+    if (b) flat['add_section_after_hook.body'] = b;
+    delete flat.add_section_after_hook;
+  }
+
+  // Build lines, skipping null/undefined/empty strings
+  const seen = new Set();
+  const entries = [];
+
+  // ordered keys first
+  for (const k of order) {
+    if (Object.prototype.hasOwnProperty.call(flat, k)) {
+      const v = flat[k];
+      if (v !== null && v !== undefined && String(v).trim() !== '') {
+        entries.push([k, v]);
+        seen.add(k);
+      }
     }
-    if (fx.reason) parts.push(`(${fx.reason})`);
-    return parts.join(' ').trim();
+  }
+  // any remaining keys
+  for (const [k, v] of Object.entries(flat)) {
+    if (seen.has(k)) continue;
+    if (v === null || v === undefined || String(v).trim() === '') continue;
+    entries.push([k, v]);
   }
 
-  // add_section_after_hook
-  if (fx.add_section_after_hook) {
-    const h = fx.add_section_after_hook.heading || '(heading)';
-    return `insert section after hook: ${h}`;
-  }
+  if (entries.length === 0) return '';
 
-  try {
-    return JSON.stringify(fx);
-  } catch {
-    return String(fx);
-  }
+  // Format nicely; quote multi-word values
+  const lines = entries.map(([k, v]) => {
+    const val =
+      typeof v === 'string'
+        ? `"${v.replace(/\r?\n/g, '\\n')}"`
+        : typeof v === 'object'
+        ? `"${JSON.stringify(v)}"`
+        : String(v);
+    return `- ${k}: ${val}`;
+  });
+
+  return lines.join('\n');
 }
 
 function main() {
-  let data;
-  try {
-    data = JSON.parse(readFileSync(reportPath, 'utf8'));
-  } catch (e) {
+  if (!existsSync(reportPath)) {
     console.log('No lint.json found; skipping JUnit conversion.');
-    process.exit(0);
+    return;
   }
+
+  const data = JSON.parse(readFileSync(reportPath, 'utf8'));
 
   const testCount = data.files.reduce((a, f) => a + f.rules.length, 0);
   const failCount = data.files.reduce(
@@ -128,54 +137,51 @@ function main() {
 
       const cases = f.rules
         .map((r) => {
-          const fixesArr = Array.isArray(r.suggested_fixes)
-            ? r.suggested_fixes
-            : [];
-          const normalized = fixesArr
-            .map(normalizeFix)
-            .filter((s) => s && s.trim().length > 0);
-          const topFix = normalized[0] || '';
-
+          // Determine a useful line number if failed
           let line = 1;
-          if (!r.pass) {
-            for (const fx of fixesArr) {
-              if (
-                fx &&
-                typeof fx === 'object' &&
-                typeof fx.quote === 'string' &&
-                fx.quote
-              ) {
-                line = findLine(src, fx.quote);
-                break;
-              }
-              if (
-                typeof fx === 'object' &&
-                typeof fx.original === 'string' &&
-                fx.original
-              ) {
-                line = findLine(src, fx.original);
-                break;
+          if (!r.pass && Array.isArray(r.suggested_fixes)) {
+            for (const fx of r.suggested_fixes) {
+              const q =
+                (fx &&
+                  typeof fx === 'object' &&
+                  typeof fx.quote === 'string' &&
+                  fx.quote) ||
+                (fx &&
+                  typeof fx === 'object' &&
+                  typeof fx.original === 'string' &&
+                  fx.original) ||
+                '';
+              if (q) {
+                line = findLine(src, q);
+                if (line > 1) break;
               }
             }
           }
 
           if (r.pass) {
+            // PASS testcases have no <failure>
             return `<testcase name="${esc(r.id)}" classname="${esc(
               repoRel
             )}" file="${esc(repoRel)}" line="${line}"></testcase>`;
           } else {
-            const msgBase = r.rationale ? r.rationale : 'Failed rule';
-            const msg = topFix ? `${msgBase} — ${topFix}` : msgBase;
+            // Message = rationale ONLY (no duplication)
+            const msg = r.rationale ? r.rationale : 'Failed rule';
 
-            const bodyLines = [];
-            if (r.rationale) bodyLines.push(`rationale: ${r.rationale}`);
-            if (normalized.length) {
-              bodyLines.push('suggested fixes:');
-              for (const s of normalized.slice(0, 20)) bodyLines.push(`- ${s}`);
-              if (normalized.length > 20)
-                bodyLines.push(`- +${normalized.length - 20} more`);
+            // Body: bullet key/value list for each fix (no "n/a"), and (once) the rationale label for clarity
+            const fixes = Array.isArray(r.suggested_fixes)
+              ? r.suggested_fixes.map(renderFixKV).filter(Boolean)
+              : [];
+            const bodyParts = [];
+            if (r.rationale)
+              bodyParts.push(
+                `- rationale: "${r.rationale.replace(/\r?\n/g, '\\n')}"`
+              );
+            if (fixes.length) {
+              bodyParts.push('- suggested fixes:');
+              // indent fixes by two spaces
+              bodyParts.push(fixes.map((l) => `  ${l}`).join('\n'));
             }
-            const body = esc(bodyLines.join('\n'));
+            const body = esc(bodyParts.join('\n'));
 
             return `<testcase name="${esc(r.id)}" classname="${esc(
               repoRel
