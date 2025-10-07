@@ -3,7 +3,7 @@
  * Convert reports/lint.json -> reports/junit.xml with repo-relative file paths
  * and best-effort line numbers from suggested_fixes (quote/original).
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const REPO_ROOT = (process.env.REPO_ROOT || '').replace(/\\/g, '/');
