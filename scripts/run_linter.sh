@@ -7,7 +7,7 @@ set -euo pipefail
 : "${ZLIST:?ZLIST is required}"               # null-delimited list of files
 : "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
 : "${MODEL:=gpt-5}"
-: "${OUT_EXITCODE:?OUT_EXITCODE is required}" # e.g. $GITHUB_OUTPUT
+OUT_EXITCODE="${OUT_EXITCODE:-${GITHUB_OUTPUT:-/tmp/llm-lint.outputs}}"
 
 cd "$LINTER_DIR"
 mkdir -p reports
