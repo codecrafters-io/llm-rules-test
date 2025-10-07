@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 /**
- * Convert reports/lint.json -> reports/junit.xml with repo-relative file paths
- * and best-effort line numbers from suggested_fixes (quote/original).
+ * Convert reports/lint.json -> reports/junit.xml
+ * - Repo-relative file paths for inline annotations
+ * - Best-effort line numbers from fixes: line > before > quote > original
+ * - Clean body as bullet key/value pairs
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -25,24 +27,87 @@ const toRepoRel = (p) => {
   return p;
 };
 
-function findLine(src, q) {
-  if (!src || !q) return 1;
-  const idx = src.indexOf(q);
-  if (idx < 0) return 1;
-  return Math.max(1, src.slice(0, idx).split(/\r?\n/).length);
+const collapseWS = (s) => s.replace(/\s+/g, ' ').trim();
+
+function findLineSmart(src, needle) {
+  if (!src || !needle) return 1;
+
+  // 0) Exact index
+  let idx = src.indexOf(needle);
+  if (idx >= 0) return src.slice(0, idx).split(/\r?\n/).length || 1;
+
+  // 1) Per-line, case-sensitive "contains"
+  const lines = src.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(needle)) return i + 1;
+  }
+
+  // 2) Per-line, case-insensitive "contains"
+  const nlc = needle.toLowerCase();
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes(nlc)) return i + 1;
+  }
+
+  // 3) Whitespace-collapsed contains (case-insensitive)
+  const srcCollapsed = collapseWS(src.toLowerCase());
+  const needleCollapsed = collapseWS(needle.toLowerCase());
+  idx = srcCollapsed.indexOf(needleCollapsed);
+  if (idx >= 0) {
+    // Map back approximately by counting original newlines up to a rough segment
+    // As exact mapping is expensive, do a best-effort: scan original lines until cumulative length exceeds idx
+    let acc = 0;
+    const origLines = src.split(/\r?\n/);
+    for (let i = 0; i < origLines.length; i++) {
+      acc += collapseWS(origLines[i].toLowerCase()).length + 1; // +1 ~ space/newline
+      if (acc >= idx) return i + 1;
+    }
+  }
+
+  return 1;
 }
 
-function renderFixKV(fx) {
-  if (fx == null) return ''; // skip empties
-  if (typeof fx === 'string') {
-    const t = fx.trim();
-    return t ? `- fix: ${t}` : '';
-  }
-  if (typeof fx !== 'object') {
-    return `- fix: ${String(fx)}`;
+function deriveLine(src, fixesArr) {
+  if (!Array.isArray(fixesArr) || fixesArr.length === 0) return 1;
+
+  // 1) If any fix explicitly has a numeric "line", trust it
+  for (const fx of fixesArr) {
+    if (
+      fx &&
+      typeof fx === 'object' &&
+      Number.isFinite(fx.line) &&
+      fx.line > 0
+    ) {
+      return Math.floor(fx.line);
+    }
   }
 
-  // Preferred ordering of keys if present
+  // 2) Prefer "before" (e.g., heading replacements), then "quote", then "original"
+  for (const key of ['before', 'quote', 'original']) {
+    for (const fx of fixesArr) {
+      if (
+        fx &&
+        typeof fx === 'object' &&
+        typeof fx[key] === 'string' &&
+        fx[key].trim()
+      ) {
+        const ln = findLineSmart(src, fx[key]);
+        if (ln > 1) return ln;
+      }
+    }
+  }
+
+  return 1;
+}
+
+/** Render a fix as bullet key/value pairs (skip empties, no "n/a") */
+function renderFixKV(fx) {
+  if (fx == null) return '';
+  if (typeof fx === 'string') {
+    const t = fx.trim();
+    return t ? `  - fix: "${t.replace(/\r?\n/g, '\\n')}"` : '';
+  }
+  if (typeof fx !== 'object') return `  - fix: "${String(fx)}"`;
+
   const order = [
     'line',
     'before',
@@ -64,7 +129,6 @@ function renderFixKV(fx) {
     'add_section_after_hook',
   ];
 
-  // Flatten add_section_after_hook for readability
   const flat = { ...fx };
   if (
     flat.add_section_after_hook &&
@@ -77,11 +141,9 @@ function renderFixKV(fx) {
     delete flat.add_section_after_hook;
   }
 
-  // Build lines, skipping null/undefined/empty strings
   const seen = new Set();
   const entries = [];
 
-  // ordered keys first
   for (const k of order) {
     if (Object.prototype.hasOwnProperty.call(flat, k)) {
       const v = flat[k];
@@ -91,7 +153,6 @@ function renderFixKV(fx) {
       }
     }
   }
-  // any remaining keys
   for (const [k, v] of Object.entries(flat)) {
     if (seen.has(k)) continue;
     if (v === null || v === undefined || String(v).trim() === '') continue;
@@ -100,7 +161,6 @@ function renderFixKV(fx) {
 
   if (entries.length === 0) return '';
 
-  // Format nicely; quote multi-word values
   const lines = entries.map(([k, v]) => {
     const val =
       typeof v === 'string'
@@ -137,51 +197,22 @@ function main() {
 
       const cases = f.rules
         .map((r) => {
-          // Determine a useful line number if failed
-          let line = 1;
           const fixesArr = Array.isArray(r.suggested_fixes)
             ? r.suggested_fixes
             : [];
-          if (!r.pass) {
-            for (const fx of fixesArr) {
-              if (
-                fx &&
-                typeof fx === 'object' &&
-                typeof fx.quote === 'string' &&
-                fx.quote
-              ) {
-                line = findLine(src, fx.quote);
-                break;
-              }
-              if (
-                typeof fx === 'object' &&
-                typeof fx.original === 'string' &&
-                fx.original
-              ) {
-                line = findLine(src, fx.original);
-                break;
-              }
-            }
-          }
+          const line = r.pass ? 1 : deriveLine(src, fixesArr);
 
           if (r.pass) {
-            // PASS testcases have no <failure>
             return `<testcase name="${esc(r.id)}" classname="${esc(
               repoRel
             )}" file="${esc(repoRel)}" line="${line}"></testcase>`;
           } else {
-            // Message = rationale ONLY (no duplication)
             const msg = r.rationale ? r.rationale : 'Failed rule';
-
-            // Body: bullet key/value list for each fix (no "n/a"), and (once) the rationale label for clarity
-            const fixes = Array.isArray(r.suggested_fixes)
-              ? r.suggested_fixes.map(renderFixKV).filter(Boolean)
-              : [];
+            const fixes = fixesArr.map(renderFixKV).filter(Boolean);
             const bodyParts = [];
             if (fixes.length) {
               bodyParts.push('- suggested fixes:');
-              // indent fixes by two spaces
-              bodyParts.push(fixes.map((l) => `  ${l}`).join('\n'));
+              bodyParts.push(fixes.join('\n')); // already indented
             }
             const body = esc(bodyParts.join('\n'));
 
