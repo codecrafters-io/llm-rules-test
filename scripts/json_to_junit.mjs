@@ -211,7 +211,7 @@ function main() {
             const fixes = fixesArr.map(renderFixKV).filter(Boolean);
             const bodyParts = [];
             if (fixes.length) {
-              bodyParts.push('\n- suggested fixes:');
+              bodyParts.push('\nSuggested fixes:');
               bodyParts.push(fixes.join('\n')); // already indented
             }
             const body = esc(bodyParts.join('\n'));
