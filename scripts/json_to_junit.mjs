@@ -108,7 +108,7 @@ function renderFixKV(fx) {
         : typeof v === 'object'
         ? `"${JSON.stringify(v)}"`
         : String(v);
-    return `- ${k}: ${val}`;
+    return `  - ${k}: ${val}`;
   });
 
   return lines.join('\n');
@@ -134,26 +134,32 @@ function main() {
       const src = f.source || '';
       const tests = f.rules.length;
       const failures = f.rules.filter((r) => !r.pass).length;
+      const fixesArr = Array.isArray(r.suggested_fixes)
+        ? r.suggested_fixes
+        : [];
 
       const cases = f.rules
         .map((r) => {
           // Determine a useful line number if failed
           let line = 1;
-          if (!r.pass && Array.isArray(r.suggested_fixes)) {
-            for (const fx of r.suggested_fixes) {
-              const q =
-                (fx &&
-                  typeof fx === 'object' &&
-                  typeof fx.quote === 'string' &&
-                  fx.quote) ||
-                (fx &&
-                  typeof fx === 'object' &&
-                  typeof fx.original === 'string' &&
-                  fx.original) ||
-                '';
-              if (q) {
-                line = findLine(src, q);
-                if (line > 1) break;
+          if (!r.pass) {
+            for (const fx of fixesArr) {
+              if (
+                fx &&
+                typeof fx === 'object' &&
+                typeof fx.quote === 'string' &&
+                fx.quote
+              ) {
+                line = findLine(src, fx.quote);
+                break;
+              }
+              if (
+                typeof fx === 'object' &&
+                typeof fx.original === 'string' &&
+                fx.original
+              ) {
+                line = findLine(src, fx.original);
+                break;
               }
             }
           }
@@ -172,10 +178,6 @@ function main() {
               ? r.suggested_fixes.map(renderFixKV).filter(Boolean)
               : [];
             const bodyParts = [];
-            if (r.rationale)
-              bodyParts.push(
-                `- rationale: "${r.rationale.replace(/\r?\n/g, '\\n')}"`
-              );
             if (fixes.length) {
               bodyParts.push('- suggested fixes:');
               // indent fixes by two spaces
