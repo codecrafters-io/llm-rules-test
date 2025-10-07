@@ -134,14 +134,14 @@ function main() {
       const src = f.source || '';
       const tests = f.rules.length;
       const failures = f.rules.filter((r) => !r.pass).length;
-      const fixesArr = Array.isArray(r.suggested_fixes)
-        ? r.suggested_fixes
-        : [];
 
       const cases = f.rules
         .map((r) => {
           // Determine a useful line number if failed
           let line = 1;
+          const fixesArr = Array.isArray(r.suggested_fixes)
+            ? r.suggested_fixes
+            : [];
           if (!r.pass) {
             for (const fx of fixesArr) {
               if (
