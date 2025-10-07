@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { PrettyReportOptions, RuleResult, Summary } from './types';
+
+import type { PrettyReportOptions, Summary } from './types';
 
 const niceDate = () =>
   new Date().toLocaleString(undefined, {

@@ -2,6 +2,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
+
 import type {
   CLIOpts,
   RuleLogOpts,
