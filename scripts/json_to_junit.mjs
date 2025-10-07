@@ -36,26 +36,42 @@ function normalizeFix(fx) {
   if (fx == null) return '';
   if (typeof fx === 'string') return fx.trim();
 
+  // Prefer precise location/transform first
+  if (fx.line != null || fx.before || fx.after || fx.heading) {
+    const parts = [];
+    if (fx.line != null) parts.push(`line ${fx.line}:`);
+    if (fx.before && fx.after)
+      return `${parts.join(' ')} "${fx.before}" → "${fx.after}"`.trim();
+    if (fx.after && !fx.before)
+      return `${parts.join(' ')} replace with "${fx.after}"`.trim();
+    if (fx.before && !fx.after)
+      return `${parts.join(' ')} replace "${
+        fx.before
+      }" (after: missing)`.trim();
+    if (fx.heading)
+      return `${parts.join(' ')} set heading to "${fx.heading}"`.trim();
+    // fallthrough if nothing usable
+  }
+
+  // match/replace_with pair
   if (fx.match || fx.replace_with) {
-    const m = fx.match ? `"${fx.match}"` : '(match: n/a)';
-    const r = fx.replace_with ? `"${fx.replace_with}"` : '(replace_with: n/a)';
+    const m = fx.match ? `"${fx.match}"` : 'pattern';
+    const r = fx.replace_with ? `"${fx.replace_with}"` : 'replacement';
     return `replace ${m} → ${r}`;
   }
 
-  if (fx.original || fx.suggestion) {
-    const o = fx.original ? `"${fx.original}"` : '(original: n/a)';
-    const s = fx.suggestion ? `"${fx.suggestion}"` : '(suggestion: n/a)';
+  // original/suggestion[/explanation] — only show "original" if present
+  if (fx.original || fx.suggestion || fx.explanation) {
+    const lhs = fx.original ? `"${fx.original}"` : '';
+    const rhs = fx.suggestion ? `"${fx.suggestion}"` : '';
     const e = fx.explanation ? ` — ${fx.explanation}` : '';
-    return `change ${o} → ${s}${e}`;
+    if (lhs && rhs) return `change ${lhs} → ${rhs}${e}`;
+    if (rhs) return `change to ${rhs}${e}`;
+    if (lhs) return `change ${lhs}${e}`;
+    // nothing meaningful
   }
 
-  if (fx.line || fx.before || fx.after) {
-    const l = fx.line != null ? `line ${fx.line}: ` : '';
-    const b = fx.before ? `"${fx.before}"` : '(before: n/a)';
-    const a = fx.after ? `"${fx.after}"` : '(after: n/a)';
-    return `${l}${b} → ${a}`;
-  }
-
+  // action/target_location/current_text/replacement_text/reason
   if (
     fx.action ||
     fx.current_text ||
@@ -72,9 +88,10 @@ function normalizeFix(fx) {
       parts.push(`${cur} → ${rep}`);
     }
     if (fx.reason) parts.push(`(${fx.reason})`);
-    return parts.join(' ');
+    return parts.join(' ').trim();
   }
 
+  // add_section_after_hook
   if (fx.add_section_after_hook) {
     const h = fx.add_section_after_hook.heading || '(heading)';
     return `insert section after hook: ${h}`;
