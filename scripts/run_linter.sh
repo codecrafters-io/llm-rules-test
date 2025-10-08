@@ -5,7 +5,7 @@ set -euo pipefail
 
 : "${LINTER_DIR:?LINTER_DIR is required}"     # e.g. tools/llm-linter
 : "${ZLIST:?ZLIST is required}"               # null-delimited list of files
-: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+: "${LLM_RULE_EVALUATOR_OPENAI_API_KEY:?LLM_RULE_EVALUATOR_OPENAI_API_KEY is required}"
 : "${MODEL:=gpt-5}"
 OUT_EXITCODE="${OUT_EXITCODE:-${GITHUB_OUTPUT:-/tmp/llm-lint.outputs}}"
 

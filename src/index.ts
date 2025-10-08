@@ -14,12 +14,14 @@ import {
 import type { FileResult, RuleResult, RuleSpec } from './types';
 import { writePrettyReport } from './reporters';
 
-if (!process.env.OPENAI_API_KEY) {
-  console.error('OPENAI_API_KEY is not set.');
+if (!process.env.LLM_RULE_EVALUATOR_OPENAI_API_KEY) {
+  console.error('LLM_RULE_EVALUATOR_OPENAI_API_KEY is not set.');
   process.exit(2);
 }
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+const client = new OpenAI({
+  apiKey: process.env.LLM_RULE_EVALUATOR_OPENAI_API_KEY!,
+});
 
 const DEFAULT_MODEL = 'gpt-5';
 const DEFAULT_REPORT_PATH = path.resolve(process.cwd(), 'reports/lint.json');

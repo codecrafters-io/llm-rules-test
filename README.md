@@ -5,7 +5,7 @@ This repository is used to enforce atomic Markdown rules against course stage de
 ## ✨ Features
 
 - **Atomic Markdown rules**: each rule lives in `rules/*.md` with front-matter and examples.
-- **LLM evaluation**: rules are checked by OpenAI models (default: `o3`).
+- **LLM evaluation**: rules are checked by OpenAI models (default: `gpt-5`).
 - **Deterministic output**: runner enforces strict JSON schema for each rule result.
 - **CI integration**: checks only changed `stage_descriptions/**/*.md` files in PRs.
 - **PR feedback**: posts a sticky comment with pass/fail results and suggested fixes.
@@ -34,7 +34,7 @@ bun run dev path/to/file1.md path/to/file2.md
 
 ### Environment variables
 
-* `OPENAI_API_KEY` (required)
+* `LLM_RULE_EVALUATOR_OPENAI_API_KEY` (required)
 * `MODEL`
 * `REPORT_PATH` (optional; write JSON report here)
 
