@@ -55,26 +55,3 @@ if [[ "$EVENT_NAME" == "pull_request" ]]; then
   echo "Found ${#abs[@]} changed stage file(s)."
   exit 0
 fi
-
-# Fallback: lint all stage files
-echo "🔎 Non-PR event. Falling back to all stage files."
-shopt -s globstar nullglob
-pushd "$COURSE_DIR" >/dev/null
-files=( stage_descriptions/**/*.md stage_descriptions/*.md )
-popd >/dev/null
-
-if ((${#files[@]} == 0)); then
-  echo "none=true" >> "$GITHUB_OUTPUT"
-  echo "No stage files found."
-  exit 0
-fi
-
-abs=()
-for f in "${files[@]}"; do
-  abs+=( "$COURSE_DIR/$f" )
-done
-printf '%s\0' "${abs[@]}" > "$OUT_ZLIST"
-
-echo "none=false" >> "$GITHUB_OUTPUT"
-echo "zlist=$OUT_ZLIST" >> "$GITHUB_OUTPUT"
-echo "Found ${#abs[@]} total stage file(s)."

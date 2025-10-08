@@ -5,7 +5,7 @@ summary: "Document tone guidelines."
 ---
 
 ## Rule
-- Friendly and approachable. 
+- Friendly and approachable.
 - User-centric & Empathetic. 
 - Neutral-professional — it doesn't get overly casual (no slang), but it avoids sounding too stiff or academic.
 

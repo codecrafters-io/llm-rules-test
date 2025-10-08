@@ -8,9 +8,9 @@ summary: "After the hook, there must be one or more titled explanation section(s
 - After the hook, content must be organized into titled explanation section(s) (>= 1).
 
 ## Good examples
-- `### Understanding BLPOP Timeouts`  
+- `### Understanding BLPOP Timeouts`
   Explains what the timeout means and when a null array is returned.
-- `### Unblocking Behavior`  
+- `### Unblocking Behavior`
   Explains the array response when an item is pushed before timeout.
 
 ## Bad examples
