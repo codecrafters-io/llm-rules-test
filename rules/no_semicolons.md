@@ -6,7 +6,7 @@ summary: "Text outside code blocks/inline code must not contain semicolons."
 
 ## Rule
 - Do not use semicolons (`;`) in normal prose.  
-- Semicolons are allowed inside fenced code blocks (``` … ```) or inline code spans (``like this;``).  
+- Semicolons are allowed inside fenced code blocks (``` … ```), inline code spans (``like this;``), or HTML code (```<div style="color: black;" />```).
 - Fail if any semicolon appears outside of code formatting.
 
 ## Good examples
