@@ -52,3 +52,17 @@ MODEL=gpt-5 bun run dev stage_descriptions/02-blpop-timeout.md
   ```bash
   bun run dev stage_descriptions/example.md
   ```
+
+## 💻 CLI Reference
+
+```bash
+--only <glob>                    limit scanned files, example: "stage_descriptions/**/base-*.md"
+--model <name>                   default: gpt-5
+--report <path>                  default: reports/lint.json
+--no-report                      skip writing the JSON summary
+--format <md|html|pdf|all>       default: md
+--out <path>                     base path for pretty reports, default: reports/lint
+--show-pass-details              include rationale for passed rules in console and reports
+--include-source                 embed source text in pretty reports
+--expand-source                  expand embedded source by default in HTML
+```
