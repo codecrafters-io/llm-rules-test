@@ -6,16 +6,18 @@ summary: "Hook must state what the user will do (action-oriented)."
 
 ## Rule
 - The hook must clearly state what the user will do (action-oriented).
+- One or two sentences of context may come before the action sentence, as `hook_one_sentence` allows. The hook passes as long as it has the action sentence.
 
 ## Good examples
 
 * “In this stage, you’ll implement support for the PING command.”
+* “Every shell starts with a prompt (usually `$`) that signals it’s ready for your command. In this stage, you’ll print that prompt.”
 
 ## Bad examples
 
-* “The PING command is used to test the connection.” (descriptive, not action-oriented)
+* “The PING command is used to test the connection.” as the whole hook (descriptive, with no action sentence)
 * "This stage covers the PING command." (descriptive, not action-oriented)
 
 ## How to fix
 
-* Keep only one sentence in the first paragraph; move any extra sentences into an Explanation section.
+* Add or rewrite a sentence so the hook says what the user will do: “In this stage, you’ll …”.
